@@ -1,7 +1,10 @@
 pragma solidity 0.4.24;
 
-contract Remittance {
+import "./Stoppable.sol";
+
+contract Remittance is Stoppable {
     
+    uint public balance;
     uint constant oneyearblocks = 365 * 86400 / 15;
 
     struct Puzzle {
@@ -24,12 +27,18 @@ contract Remittance {
         uint balance
     );
 
+    event LogRefund(
+        address indexed sender,
+        address remitter,
+        uint amount
+    );
+
     function hashPasswords (address sender, bytes32 pw1, bytes32 pw2) public view returns (bytes32) { 
         return keccak256(abi.encodePacked(this, sender, pw1, pw2));
     }
     
 
-    function sendFunds (address sender, bytes32 hashedpw, uint blockDuration) public payable returns (bool) {
+    function sendFunds (address sender, bytes32 hashedpw, uint blockDuration) public payable onlyOwner onlyIfRunning returns (bool) {
         require(msg.value > 0, "msg.value should be greater than 0");
         require(puzzles[sender].balance == 0, "puzzles balance should be equals 0");
         require(blockDuration > 0, "block number should be more than 0");
@@ -40,12 +49,12 @@ contract Remittance {
         puzzles[sender].lastblock = lastblock;
         puzzles[sender].encyptedPw = hashedpw;
 
-        emit LogSendFund (msg.sender, hashedpw, msg.value, blockDuration);
+        emit LogSendFund(msg.sender, hashedpw, msg.value, blockDuration);
 
         return true;
     }
 
-    function withdraw (bytes32 pw1, bytes32 pw2) public returns (bool) {
+    function withdraw (bytes32 pw1, bytes32 pw2) public returns onlyIfRunning (bool) {
         require(pw1.length > 0 || pw2.length > 0 , "password must not be empty");
         require(puzzles[msg.sender].encyptedPw == hashPasswords(msg.sender,pw1,pw2), "Incorrect pw");
 
@@ -60,6 +69,19 @@ contract Remittance {
         emit LogWithdraw(msg.sender, balance);
         msg.sender.transfer(balance);
 
+        return true;
+    }
+
+    function refund (address remitter) public onlyOwner onlyIfRunning returns (bool success) {
+        require(puzzles[remitter].balance > 0 );
+        require(puzzles[remitter].lastblock <= block.number);
+        uint256 refundAmount;
+        refundAmount = puzzles[remitter].balance;
+        puzzles[remitter].balance = 0;
+        balance -= refundAmount;
+        owner.transfer(refundAmount);
+
+        emit LogRefund(msg.sender, remitter, refundAmount);
         return true;
     }
 
