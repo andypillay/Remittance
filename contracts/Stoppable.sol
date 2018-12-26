@@ -1,4 +1,4 @@
-pragma solidity ^0.4.24;
+pragma solidity 0.4.24;
 
 import "./Ownable.sol";
 
@@ -7,20 +7,29 @@ contract Stoppable is Ownable {
 
     bool public running;
 
-    event LogToggle(address sender, bool toggleSetting);
+    event LogPause(address sender);
+    event LogResume(address sender);
 
     modifier onlyIfRunning {
         require(running);
         _;
     }
 
-    function Stoppable() public {
+    constructor () public {
         running = true;
     }
 
-    function flickToggler(bool onOff) public onlyOwner returns(bool success) {
-        running = onOff;
-        LogRunSwitch(msg.sender, onOff);
+    function pause() public onlyOwner returns(bool success){
+        require(running);
+        emit LogPause(msg.sender);
+        running = false;
+        return true;
+    }
+
+    function resume() public onlyOwner returns(bool success){
+        require(!running);
+        emit LogResume(msg.sender);
+        running = true;
         return true;
     }
 
